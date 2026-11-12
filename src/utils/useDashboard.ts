@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { BusinessAnswers, Currency, Dashboard, DashboardState, ToastMessage } from '../types';
-import { DEMO_ANSWERS, isValidAnswers } from './answers';
+import type { BusinessAnswers, BusinessProfile, Currency, Dashboard, DashboardMode, DashboardState, ToastMessage } from '../types';
+import { DEMO_ANSWERS, readSavedAnswers } from './answers';
+import { DEMO_PROFILE, readSavedProfile } from './businessProfile';
 
 const DATA_STORAGE_KEY = 'datadash.v2';
 const TOAST_DURATION_MS = 7000;
-const DEMO_STATE: DashboardState = { answers: DEMO_ANSWERS, isSample: true, displayCurrency: DEMO_ANSWERS.currency, incompleteAnswers: null };
+const DEMO_STATE: DashboardState = { answers: DEMO_ANSWERS, profile: DEMO_PROFILE, mode: 'extended', isSample: true, displayCurrency: DEMO_ANSWERS.currency, incompleteAnswers: null };
 
+/**
+ * Older saves have no profile, per-sale or comparison answers, and no mode; they still load, with those parts left blank.
+ * A save without a mode holds the customer answers, so it is Extended.
+ */
 function loadSavedState(): DashboardState {
   try {
     const saved = JSON.parse(localStorage.getItem(DATA_STORAGE_KEY) ?? 'null');
     if (!saved?.answers) return DEMO_STATE;
-    if (!isValidAnswers(saved.answers)) return { ...DEMO_STATE, incompleteAnswers: saved.answers };
+    const mode: DashboardMode = saved.mode === 'instant' ? 'instant' : 'extended';
+    const answers = readSavedAnswers(saved.answers, mode);
+    if (!answers) return { ...DEMO_STATE, incompleteAnswers: saved.answers };
+    const isSample = !!saved.isSample;
     const displayCurrency: Currency = saved.displayCurrency === 'ILS' ? 'ILS' : 'USD';
-    return { answers: saved.answers, isSample: !!saved.isSample, displayCurrency, incompleteAnswers: saved.incompleteAnswers ?? null };
+    const profile = isSample ? DEMO_PROFILE : readSavedProfile(saved.profile);
+    return { answers, profile, mode, isSample, displayCurrency, incompleteAnswers: saved.incompleteAnswers ?? null };
   } catch {
     return DEMO_STATE;
   }
@@ -45,9 +54,13 @@ export function useDashboard(): Dashboard {
     setToast({ toastId: Date.now(), message });
   }, []);
 
-  const submitAnswers = useCallback((answers: BusinessAnswers) => {
-    commitWithUndo({ answers, isSample: false, displayCurrency: answers.currency, incompleteAnswers: null }, 'Dashboard updated with your answers');
+  const submitAnswers = useCallback((answers: BusinessAnswers, profile: BusinessProfile, mode: DashboardMode) => {
+    commitWithUndo({ answers, profile, mode, isSample: false, displayCurrency: answers.currency, incompleteAnswers: null }, 'Dashboard updated with your answers');
   }, [commitWithUndo]);
+
+  const updateProfile = useCallback((profile: BusinessProfile) => {
+    setState((current) => ({ ...current, profile }));
+  }, []);
 
   /** Live edits. Changing the entered currency also changes what is displayed. */
   const updateAnswers = useCallback((answers: BusinessAnswers) => {
@@ -72,5 +85,5 @@ export function useDashboard(): Dashboard {
 
   const dismissToast = useCallback(() => setToast(null), []);
 
-  return { ...state, toast, submitAnswers, updateAnswers, clearAnswers, setDisplayCurrency, undoLastChange, dismissToast };
+  return { ...state, toast, submitAnswers, updateAnswers, updateProfile, clearAnswers, setDisplayCurrency, undoLastChange, dismissToast };
 }

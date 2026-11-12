@@ -6,8 +6,10 @@ export function formatMoney(amount: number, currency: Currency): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
 }
 
-export function formatCompactMoney(amount: number, currency: Currency): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(amount);
+/** For small per-sale amounts, where cents matter: $3.20, but $40 rather than $40.00. */
+export function formatUnitMoney(amount: number, currency: Currency): string {
+  const hasCents = Math.round(amount * 100) % 100 !== 0;
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: hasCents ? 2 : 0, maximumFractionDigits: 2 }).format(amount);
 }
 
 export const formatWholeNumber = (amount: number) => Math.round(amount).toLocaleString('en-US');
@@ -29,3 +31,6 @@ export function formatPercent(percent: number): string {
   }
   return `~${percent.toFixed(MAX_PERCENT_DECIMALS)}%`;
 }
+
+/** A change in percent with its sign, so a rise reads +12.5% and a fall -4.0%. */
+export const formatSignedPercent = (percent: number) => (percent > 0 ? '+' : '') + formatPercent(percent);
